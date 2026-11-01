@@ -1,92 +1,94 @@
-# tinySA Simple Viewer
+# tinySA シンプル ビューア
 
-[日本語版はこちら (Japanese)](README.ja.md)
+[English version](README.en.md)
 
-A minimal Windows viewer for the **tinySA Ultra / Ultra+** spectrum analyzer.
-Connect the tinySA by USB and the PC shows the same sweep as the tinySA screen, with up to four markers.
+### [⬇ ダウンロード（最新版の exe）](https://github.com/nqf18003/tinysa-simple-viewer/releases/latest)
+リンク先のページの下にある **Assets** の `tinySA_Simple.exe` を押すとダウンロードできます。
 
-- The frequency range and the vertical scale follow the tinySA settings. The PC never changes the frequency.
-- Markers M1-M4 can be placed with the mouse and moved with the arrow keys. The tinySA markers move with them.
-- The tinySA screen and the graph can be saved as PNG images.
+スペクトラムアナライザー **tinySA Ultra / Ultra+** 用の、Windows で動く最小限のビューアです。
+tinySA を USB でつなぐと、本体と同じ掃引をパソコンに表示します。マーカーは 4 つまで使えます。
+画面の文字は英語です（英語圏の人にも使ってもらうため）。
 
-> **Important: use the latest firmware. Without it, this viewer may not work.**
-> Please update the tinySA to the latest firmware before use.
+- 表示する周波数の範囲と縦軸は、本体の設定に合わせます。パソコンから周波数は変えません。
+- マーカー M1〜M4 はマウスで置き、矢印キーで動かします。本体のマーカーも一緒に動きます。
+- 本体の画面とグラフを PNG 画像で保存できます。
+
+> **大切: 最新のファームウェアを使わないと、使えない場合があります。**
+> 使う前に、tinySA を最新のファームウェアに更新してください。
 >
-> **Tested with:** tinySA Ultra+ **ZS406** and **ZS407**, firmware v1.4-266. Other models have not been tested.
+> **テストした機種:** tinySA Ultra+ の **ZS406** と **ZS407**（ファームウェア v1.4-266）。ほかの機種ではテストしていません。
 >
-> This viewer works best with firmware **v1.4-216 or later**. Newer firmware has the
-> `waitscan` command, which lets the viewer read each sweep after it has finished, so every sweep on the tinySA runs to the end.
-> With older firmware the viewer has to guess the timing. Sweeps may then be cut short, and the tinySA may sometimes stop responding.
-> Firmware and update instructions: https://tinysa.org/wiki/
+> このビューアは、ファームウェア **v1.4-216 以降**で一番よく動きます。新しいファームウェアには
+> `waitscan` 命令があり、本体の掃引が終わってから読めるので、本体の掃引が毎回最後まで終わります。
+> 古いファームウェアでは読むタイミングを推測するため、掃引が途中で切れたり、本体がときどき応答しなくなったりすることがあります。
+> ファームウェアと更新のしかた: https://tinysa.org/wiki/
 
-## Requirements
+## 必要なもの
 - Windows 10 / 11
-- tinySA Ultra or Ultra+ (tested with ZS406 and ZS407)
-- A USB cable (data capable)
+- tinySA Ultra または Ultra+（ZS406・ZS407 で確認）
+- USB ケーブル（データ通信ができるもの）
 
-## Getting started
-### Using the exe
-1. Download `tinySA_Simple.exe` from the [Releases](../../releases) page.
-2. Double-click it. No installation is needed.
-   - The first time, Windows may show **"Windows protected your PC"** (SmartScreen), because the exe is not digitally signed.
-     Click **More info**, then **Run anyway**.
+## 起動
+### exe で使う
+1. [最新版のページ](https://github.com/nqf18003/tinysa-simple-viewer/releases/latest)から `tinySA_Simple.exe` をダウンロードします。
+2. ダブルクリックで起動します。インストールは要りません。
+   - 初めて起動するとき、Windows が「**Windows によって PC が保護されました**」（SmartScreen）と出すことがあります。
+     exe に電子署名がないためです。「**詳細情報**」を押してから「**実行**」を押してください。
 
-### Using Python
-1. Install Python 3.12 or later.
-2. In this folder, run:
+### Python で使う
+1. Python 3.12 以降を入れます。
+2. このフォルダで次を実行します。
    ```
    python -m pip install -r requirements.txt
    python tinysa_simple.py
    ```
 
-## How to use
-1. Select the tinySA's COM port under **Port** and click **Connect**.
-   - Click **Refresh** if the port is not in the list.
-   - **Dummy (no device)** lets you try the viewer without a tinySA.
-2. The graph shows the tinySA sweep and is updated after every sweep.
-   - To change the range or the reference level, change it on the tinySA. The PC follows within about one sweep.
-   - The top bar shows the model, hardware version and firmware version.
-   - Slow sweep settings (wide span, narrow RBW) make the PC update slowly too.
-3. **Markers (up to 4)**
+## 使い方
+1. **Port** で tinySA の COM ポートを選び、**Connect**（接続）を押します。
+   - 一覧に無いときは **Refresh**（更新）を押します。
+   - **Dummy (no device)** を選ぶと、実機なしで試せます。
+2. グラフに本体の掃引が表示され、本体の掃引が 1 回終わるたびに更新されます。
+   - 範囲や基準レベルを変えるときは本体で操作します。掃引 1 回分ほどでパソコンにも反映されます。
+   - 上の欄に、機種・ハードの版・ファームウェアの版が出ます。
+   - 掃引が遅い設定（範囲が広い・RBW が狭い）では、パソコンの更新もゆっくりになります。
+3. **マーカー（4 つまで）**
 
-   | Action | How |
+   | すること | 操作 |
    |---|---|
-   | Select a marker | **M1-M4** buttons or keys **1-4** |
-   | Place it | Click on the graph |
-   | Move 1 point / 10 points | **← →** / **Shift + ← →** |
-   | Clear it | **Delete** key or **Clear selected marker** |
+   | マーカーを選ぶ | **M1〜M4** のボタンか、キーボードの **1〜4** |
+   | 置く | グラフをクリック |
+   | 1 点ずつ / 10 点ずつ動かす | **← →** / **Shift + ← →** |
+   | 消す | **Delete** キーか **Clear selected marker** |
 
-   - The frequency and level of each marker are shown below the graph.
-   - **The tinySA markers follow the viewer** (viewer → tinySA only). When you place, move or clear M1-M4 in the viewer,
-     the tinySA marker with the same number does the same after the current sweep. Moving a marker on the tinySA does not
-     move it in the viewer.
-4. **Saving images.** Files go to the `captures` folder next to the exe (or next to `tinysa_simple.py`), named with the date and time.
-   - **Save device screen** saves the tinySA screen (480 × 320). The screen is read between sweeps, so neither the tinySA nor the viewer stops.
-   - **Save graph** saves the graph with the model, date/time and marker values. The image is always 1200 × 800 pixels, whatever the window size.
-   - The bottom right of the window shows where the file was saved.
-5. Click **Disconnect** or close the window when you are done.
+   - グラフの下に、各マーカーの周波数とレベルを表示します。
+   - **本体のマーカーもアプリに合わせて動きます**（アプリ → 本体の一方向）。アプリで M1〜M4 を置く・動かす・消すと、
+     今の掃引が終わったところで、本体の同じ番号のマーカーも同じようになります。本体のつまみで動かしても、アプリには反映されません。
+4. **画像の保存**。exe（または `tinysa_simple.py`）と同じ場所の `captures` フォルダに、日時の名前で保存します。
+   - **Save device screen** … 本体の画面（480 × 320）を保存します。掃引の合間に取り込むので、本体もアプリも止まりません。
+   - **Save graph** … グラフを、機種・日時・マーカーの値と一緒に保存します。ウィンドウの大きさに関係なく、いつも 1200 × 800 ピクセルです。
+   - 保存した場所は、ウィンドウの右下に出ます。
+5. 終わるときは **Disconnect**（切断）を押すか、ウィンドウを閉じます。
 
-## Notes
-- **MAX HOLD on the tinySA works while connected.** Clicking **Disconnect** returns the tinySA to normal sweeping,
-  and this clears MAX HOLD.
-- While connected, the tinySA may show **PAUSED** between sweeps. This is normal; the sweep continues.
-- The tinySA restarts its sweep whenever it receives a command. The viewer only sends commands between sweeps.
-- If the viewer says **"The tinySA is not responding"**: click Disconnect, unplug the USB cable, turn the tinySA off and on, then connect again.
+## 注意
+- **接続中も本体の MAX HOLD が使えます。** ただし **Disconnect** を押すと本体を通常の掃引に戻すので、そのとき MAX HOLD は消えます。
+- 接続中、本体の画面に **PAUSED**（一時停止）と出ることがあります。故障ではなく、掃引は続いています。
+- tinySA は命令を受けるたびに掃引を最初からやり直します。このビューアは掃引の合間にだけ命令を送ります。
+- **「The tinySA is not responding」**（本体が応答しません）と出たら、Disconnect を押し、USB を抜いて本体の電源を入れ直してから、もう一度つないでください。
 
-## Data and privacy
-- The viewer talks to the tinySA over USB only. Nothing is sent to the internet.
-- Saved images stay in the `captures` folder on your PC.
-- If a communication problem happens, a short record is written to `error_log.txt` next to the exe, for troubleshooting.
+## データの保存先・送り先
+- tinySA とのやりとりは USB だけです。インターネットには何も送りません。
+- 保存した画像は、パソコンの `captures` フォルダだけに置きます。
+- 通信のトラブルがあったときだけ、原因を調べるために exe と同じ場所の `error_log.txt` に記録します。
 
-## Disclaimer
-This is an unofficial, personal project. It is not affiliated with or endorsed by the makers of the tinySA.
-"tinySA" is used only to describe which device this viewer works with. Use it at your own risk.
+## おことわり
+これは個人が作った非公式のソフトです。tinySA のメーカーとは関係がなく、メーカーが認めたものでもありません。
+「tinySA」の名前は、どの機器で使えるかを示すためだけに使っています。使用は自己責任でお願いします。
 
-## License
-MIT License. See [LICENSE](LICENSE).
+## ライセンス
+MIT ライセンスです。[LICENSE](LICENSE) を見てください。
 
-## Files
-- `tinysa_simple.py` — the window (graph, markers, saving)
-- `tinysa_device.py` — communication with the tinySA (USB serial)
-- `requirements.txt` — Python packages needed to run from source
-- `icon.ico` — the app icon (`make_icon.py` recreates it)
+## ファイル
+- `tinysa_simple.py` … 画面（グラフ・マーカー・保存）
+- `tinysa_device.py` … tinySA との通信（USB シリアル）
+- `requirements.txt` … Python で動かすときに必要な部品
+- `icon.ico` … アプリのアイコン（`make_icon.py` で作り直せます）
