@@ -116,12 +116,19 @@ class TinySABase:
         return None
 
     def get_rbw(self):
-        """現在の RBW [kHz]。応答の "xxxx.xHz" の行を読む。"""
+        """現在の実際の RBW [kHz]。応答の "3kHz" / "200Hz" / "1000Hz" の行を読む
+        （本体は単位の前に k・M を付けて答える。ファームウェアの cmd_rbw は %F = 接頭語付きの書式）。"""
         for line in self.cmd("rbw"):
-            m = re.search(rf"({_NUM})\s*Hz", line)
+            m = re.search(rf"({_NUM})\s*([kMG]?)Hz", line)
             if m:
-                return float(m[1]) / 1e3
+                return float(m[1]) * {"": 1, "k": 1e3, "M": 1e6, "G": 1e9}[m[2]] / 1e3
         return None
+
+    def get_calc(self):
+        """トレース 1 の計算モード（"OFF" / "MAXH" など）。引数なしの calc の 2 行目を読む。読めなければ ""。"""
+        lines = self.cmd("calc")
+        last = lines[-1].strip() if lines else ""
+        return "" if "calc" in last.lower() else last.upper()  # 1 行目（usage: calc ...）しか無ければ読めない
 
     def get_identity(self):
         """(型番, ハードの版, ファームウェアの版)。info の 1 行目と version の答えから読む。読めない所は ""。"""
@@ -308,7 +315,9 @@ class SimulatedTinySA(TinySABase):
         self.last = None
         self.ultra = False
         self.atten = 0.0
-        self.set_markers = {}  # パソコンから動かしたマーカー {番号: 点の番号 or None}
+        self.set_markers = {}  # 本体のマーカー {番号: 点の番号 or None（消えている）}。動作確認では直接書き換えて本体での操作をまねる
+        self.ext_gain = 0.0
+        self.marker_delta = {}  # {番号: 差（Δ）表示か}
 
     def _freqs(self):
         return np.linspace(self.start, self.stop, self.points)
@@ -346,9 +355,9 @@ class SimulatedTinySA(TinySABase):
 
     def _markers(self):
         y = self.last if self.last is not None else self._spectrum()
-        i = int(np.argmax(y))
-        j = int(np.argmin(np.abs(self._freqs() - 145e6)))
-        return [Marker(1, i, self._freqs()[i], y[i]), Marker(2, j, self._freqs()[j], y[j])]
+        f = self._freqs()
+        return [Marker(n, i, f[i], y[i]) for n, i in sorted(self.set_markers.items())
+                if i is not None and 0 <= i < len(f)]
 
     def cmd(self, text, timeout=3.0):
         time.sleep(0.03)  # USB の往復時間っぽく
@@ -359,6 +368,19 @@ class SimulatedTinySA(TinySABase):
         if name == "sweep":
             if len(args) >= 3 and args[1] == "cw":  # ゼロスパン（開始＝終了）
                 self.start = self.stop = float(args[2])
+                self.stored = None
+                return []
+            if len(args) >= 3 and args[1] in ("start", "stop", "center", "span"):
+                v = float(args[2])
+                c, s = (self.start + self.stop) / 2, self.stop - self.start
+                if args[1] == "start":
+                    self.start, self.stop = v, max(self.stop, v)
+                elif args[1] == "stop":
+                    self.start, self.stop = min(self.start, v), v
+                elif args[1] == "center":
+                    self.start, self.stop = max(v - s / 2, 0.0), v + s / 2
+                else:
+                    self.start, self.stop = max(c - v / 2, 0.0), c + v / 2
                 self.stored = None
                 return []
             if len(args) >= 3:
@@ -373,7 +395,7 @@ class SimulatedTinySA(TinySABase):
         if name == "info":
             return ["tinySA ULTRA+ ZS407 (simulation)", "Version: tinySA4 (simulation)"]
         if name == "help":
-            return ["commands: sweep pause resume wait waitscan trace marker rbw attenuate ultra calc sweeptime",
+            return ["commands: sweep pause resume wait waitscan trace marker rbw attenuate ext_gain ultra calc sweeptime",
                     "Other commands: version data frequencies scan capture help"]
         if name == "waitscan":  # 1 回掃引して一時停止（一時停止中でも 1 回掃引する。実機と同じ）
             time.sleep(0.5)
@@ -391,13 +413,19 @@ class SimulatedTinySA(TinySABase):
                 if self.calc == "off":
                     self.last = None
                 return []
-            return ["calc [{trace#}] off|minh|maxh|maxd|aver4|aver16|aver|quasi|log|lin"]
+            return ["calc [{trace#}] off|minh|maxh|maxd|aver4|aver16|aver|quasi|log|lin", self.calc.upper()]
         if name == "rbw":
             if len(args) >= 2:
                 self.rbw_auto = args[1] in ("auto", "0")
                 self.rbw_khz = 300.0 if self.rbw_auto else min(max(float(args[1]), 0.2), 850)
                 return []
-            return ["rbw 0.2..850|auto", f"{self.rbw_khz * 1e3:.1f}Hz"]
+            hz = self.rbw_khz * 1e3  # 実機と同じく 1000 Hz を超えると k を付ける
+            return ["rbw 0.2..850|auto", f"{hz / 1e3:g}kHz" if hz > 1000 else f"{hz:g}Hz"]
+        if name == "ext_gain":  # 実機と同じく、引数なしでは今の値を返さない
+            if len(args) >= 2:
+                self.ext_gain = float(args[1])
+                return []
+            return ["usage: ext_gain -100.0..+100.0"]
         if name == "attenuate":
             if len(args) >= 2:
                 if args[1] != "auto":
@@ -424,7 +452,10 @@ class SimulatedTinySA(TinySABase):
             y = self._spectrum() if which != 1 else (self.stored if self.stored is not None else self._spectrum())
             return [f"{v:e}" for v in y]
         if name == "marker":
-            if len(args) >= 3:  # marker {n} {点の番号}|off … 動作確認用に覚えておくだけ
+            if len(args) >= 4 and args[2] == "delta":  # marker {n} delta {基準の番号}|off … 差（Δ）表示の切り替え
+                self.marker_delta[int(args[1])] = args[3] != "off"
+                return []
+            if len(args) >= 3:  # marker {n} {点の番号}|off … 本体のマーカーの一覧を書き換える
                 self.set_markers[int(args[1])] = None if args[2] == "off" else int(args[2])
                 return []
             return [f"{m.id} {m.index} {int(m.freq)} {m.value:.2e}" for m in self._markers()]
@@ -448,14 +479,14 @@ class SimulatedTinySA(TinySABase):
         for k in range(11):
             x = gx0 + gw * k / 10
             d.line([(x, gy0), (x, gy0 + gh)], fill=(64, 64, 64))
-        for k in range(9):
-            yv = gy0 + gh * k / 8
+        for k in range(11):
+            yv = gy0 + gh * k / 10
             d.line([(gx0, yv), (gx0 + gw, yv)], fill=(64, 64, 64))
         y = self._spectrum()
         n = y.size
-        lo = self.reflevel - 8 * self.scale
+        lo = self.reflevel - 10 * self.scale
         pts = [(gx0 + gw * i / (n - 1),
-                gy0 + gh * (1 - (min(max(v, lo), self.reflevel) - lo) / (8 * self.scale))) for i, v in enumerate(y)]
+                gy0 + gh * (1 - (min(max(v, lo), self.reflevel) - lo) / (10 * self.scale))) for i, v in enumerate(y)]
         d.line(pts, fill=(255, 255, 0))
         for m in self._markers():
             x, yy = pts[m.index]
