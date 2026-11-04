@@ -48,8 +48,9 @@ class TinySABase:
 
     version = ""
     on_timeout = None
+    on_slow = None  # 長い掃引を待ち続けているときの通知先 (コマンド, 待った秒数)
 
-    def cmd(self, text, timeout=3.0):  # -> list[str]
+    def cmd(self, text, timeout=3.0, max_wait=None):  # -> list[str]
         raise NotImplementedError
 
     def capture_raw(self):  # -> bytes (RGB565)
@@ -155,9 +156,10 @@ class TinySABase:
             self._commands = words
         return name in self._commands
 
-    def wait_scan(self, timeout):
-        """今の掃引が最後まで終わるのを待ち、本体を一時停止させる（waitscan 命令。ファームウェア v1.4-216 以降）。"""
-        self.cmd("waitscan", timeout=timeout)
+    def wait_scan(self, timeout, max_wait=None):
+        """今の掃引が最後まで終わるのを待ち、本体を一時停止させる（waitscan 命令。ファームウェア v1.4-216 以降）。
+        max_wait を渡すと、timeout を過ぎても本体が命令を受け取っている（エコーが返っている）間は max_wait 秒まで待つ。"""
+        self.cmd("waitscan", timeout=timeout, max_wait=max_wait)
 
     def get_sweeptime(self):
         """1 回の掃引にかかる時間 [秒]。応答の "4.204s" / "700ms" / "500us" の行を読む。読めなければ None。"""
@@ -220,11 +222,14 @@ class TinySA(TinySABase):
                 pass
         self.version = " ".join(self.cmd("version"))
 
-    def _read_until(self, done, timeout, idle=2.0):
+    def _read_until(self, done, timeout, idle=2.0, max_wait=None, echo=None):
         """done(buf) が真になるまで読む。最初の応答（掃引の終わり）は timeout 秒まで待つが、
-        本文が流れ始めた後に idle 秒途切れたら、それ以上は来ないとみなす。"""
+        本文が流れ始めた後に idle 秒途切れたら、それ以上は来ないとみなす。
+        max_wait と echo を渡すと、timeout を過ぎてもエコーだけ届いて本文がまだ（掃引の途中）なら max_wait 秒まで待ち続ける
+        （狭い RBW などで掃引が長いとき、途中で諦めて次の命令を送ると、返事がずっとずれたままになるため。2026-11-04）。"""
         buf = bytearray()
-        deadline = time.time() + timeout
+        started = time.time()
+        deadline = started + timeout
         while True:
             chunk = self.ser.read(self.ser.in_waiting or 1)
             if chunk:
@@ -234,12 +239,18 @@ class TinySA(TinySABase):
                 if done(buf):
                     return bytes(buf)
             elif time.time() > deadline:
+                elapsed = time.time() - started
+                if max_wait and elapsed < max_wait and buf.count(b"\n") < 2 and echo and echo in buf:
+                    if self.on_slow:
+                        self.on_slow(echo.decode("ascii", errors="replace").strip(), elapsed)
+                    deadline = time.time() + min(2.0, max_wait - elapsed)
+                    continue
                 err = TimeoutError(f"no reply from tinySA (received {len(buf)} bytes, "
                                    f"last: {bytes(buf[-40:])!r})")
                 err.partial = bytes(buf)
                 raise err
 
-    def cmd(self, text, timeout=3.0):
+    def cmd(self, text, timeout=3.0, max_wait=None):
         with self.lock:
             # 前のコマンドがタイムアウトして応答の残りが届いていると、次の応答とずれてしまうので捨てる
             # （毎回は捨てない。実機では毎回捨てなくても data 2 が正しく届くことを確かめた）
@@ -249,7 +260,8 @@ class TinySA(TinySABase):
             self.ser.write((text + "\r").encode("ascii"))
             try:
                 # 終わりの合図 "ch> " の後ろに改行などが付いて届いても終わりと判断する
-                raw = self._read_until(lambda b: _PROMPT_END.search(b[-16:]) is not None, timeout)
+                raw = self._read_until(lambda b: _PROMPT_END.search(b[-16:]) is not None, timeout,
+                                       max_wait=max_wait, echo=(text + "\r\n").encode("ascii"))
             except TimeoutError as e:
                 self.dirty = True
                 # 合図だけ届かず本文は届いている場合（実機で発生）は、届いた行を使う。2 行未満なら失敗扱い
@@ -359,7 +371,7 @@ class SimulatedTinySA(TinySABase):
         return [Marker(n, i, f[i], y[i]) for n, i in sorted(self.set_markers.items())
                 if i is not None and 0 <= i < len(f)]
 
-    def cmd(self, text, timeout=3.0):
+    def cmd(self, text, timeout=3.0, max_wait=None):
         time.sleep(0.03)  # USB の往復時間っぽく
         args = text.split()
         name = args[0] if args else ""

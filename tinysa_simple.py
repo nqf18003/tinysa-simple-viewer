@@ -285,7 +285,10 @@ class Worker(threading.Thread):
             if self._paused():
                 continue
             try:
-                self.dev.wait_scan(timeout=max(self.sweeptime * 4, 5.0) + 10)
+                # 掃引が長い（狭い RBW など）ときは、本体が命令を受け取っている限り 3 分まで待つ。
+                # 掃引時間は読み終えるたびに読み直すので、狭い RBW に変えた直後は前の短い値のままになっている
+                self.dev.on_slow = lambda c, sec: self.q.put(("slow", sec))
+                self.dev.wait_scan(timeout=max(self.sweeptime * 4, 5.0) + 10, max_wait=180)
                 y = self.dev.get_data(2)
                 first, changed = self._read_settings()
                 self.errors = 0
@@ -688,6 +691,8 @@ class App(tk.Tk):
                 elif msg[0] == "mode" and not msg[1]:
                     self.status.set("Old firmware: the update timing is estimated from the sweep time "
                                     "(update the firmware to follow the end of each sweep)")
+                elif msg[0] == "slow" and self.dev and not self.paused:
+                    self.status.set(f"Waiting for the tinySA to finish a long sweep ({msg[1]:.0f} s)...")
                 elif msg[0] == "error" and self.dev:
                     self.status.set("Communication error: " + msg[1])
                 elif msg[0] == "markers":
